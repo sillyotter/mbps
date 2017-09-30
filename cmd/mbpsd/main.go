@@ -25,7 +25,6 @@ import (
 
 	"github.com/sillyotter/mbps/auth"
 	"github.com/sillyotter/mbps/cluster"
-	"github.com/sillyotter/mbps/disco"
 	httpd "github.com/sillyotter/mbps/http"
 	"github.com/sillyotter/mbps/store"
 	"github.com/sillyotter/mbps/tcp"
@@ -34,14 +33,6 @@ import (
 const sqliteDSN = "db.sqlite"
 
 const logo = `
-            _ _ _
-           | (_) |
-  _ __ __ _| |_| |_ ___
- | '__/ _  | | | __/ _ \   The lightweight, distributed
- | | | (_| | | | ||  __/   relational database.
- |_|  \__, |_|_|\__\___|
-         | |
-         |_|
 `
 
 // These variables are populated via the Go linker.
@@ -63,7 +54,6 @@ const (
 )
 
 var httpAddr string
-var httpAdv string
 var authFile string
 var x509Cert string
 var x509Key string
@@ -75,12 +65,8 @@ var raftAdv string
 var joinAddr string
 var noVerify bool
 var noNodeVerify bool
-var discoURL string
-var discoID string
 var expvar bool
 var pprofEnabled bool
-var dsn string
-var onDisk bool
 var raftSnapThreshold uint64
 var raftHeartbeatTimeout string
 var raftApplyTimeout string
@@ -89,13 +75,11 @@ var showVersion bool
 var cpuProfile string
 var memProfile string
 
-const name = `rqlited`
-const desc = `rqlite is a lightweight, distributed relational database, which uses SQLite as its
-storage engine. It provides an easy-to-use, fault-tolerant store for relational data.`
+const name = `mbpsd`
+const desc = `mbpsd is a distributed mailbox pubsub engine`
 
 func init() {
 	flag.StringVar(&httpAddr, "http-addr", "localhost:4001", "HTTP server bind address. For HTTPS, set X.509 cert and key")
-	flag.StringVar(&httpAdv, "http-adv-addr", "", "Advertised HTTP address. If not set, same as HTTP server")
 	flag.StringVar(&x509Cert, "http-cert", "", "Path to X.509 certificate for HTTP endpoint")
 	flag.StringVar(&x509Key, "http-key", "", "Path to X.509 private key for HTTP endpoint")
 	flag.BoolVar(&noVerify, "http-no-verify", false, "Skip verification of remote HTTPS cert when joining cluster")
@@ -107,12 +91,8 @@ func init() {
 	flag.StringVar(&raftAddr, "raft-addr", "localhost:4002", "Raft communication bind address")
 	flag.StringVar(&raftAdv, "raft-adv-addr", "", "Advertised Raft communication address. If not set, same as Raft bind")
 	flag.StringVar(&joinAddr, "join", "", "Comma-delimited list of nodes, through which a cluster can be joined (proto://host:port)")
-	flag.StringVar(&discoURL, "disco-url", "http://discovery.rqlite.com", "Set Discovery Service URL")
-	flag.StringVar(&discoID, "disco-id", "", "Set Discovery ID. If not set, Discovery Service not used")
 	flag.BoolVar(&expvar, "expvar", true, "Serve expvar data on HTTP server")
 	flag.BoolVar(&pprofEnabled, "pprof", true, "Serve pprof data on HTTP server")
-	flag.StringVar(&dsn, "dsn", "", `SQLite DSN parameters. E.g. "cache=shared&mode=memory"`)
-	flag.BoolVar(&onDisk, "on-disk", false, "Use an on-disk SQLite database")
 	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 	flag.StringVar(&raftHeartbeatTimeout, "raft-timeout", "1s", "Raft heartbeat timeout")
 	flag.StringVar(&raftApplyTimeout, "raft-apply-timeout", "10s", "Raft apply timeout")
@@ -192,7 +172,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
-	dbConf := store.NewDBConfig(dsn, !onDisk)
+	dbConf := store.NewDBConfig("dsn", true)
 
 	str := store.New(&store.StoreConfig{
 		DBConf: dbConf,
@@ -264,9 +244,6 @@ func main() {
 	// The Raft layer broadcasts the resolved address, so use that as the key. But
 	// only set different HTTP advertise address if set.
 	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
-	}
 
 	if err := publishAPIAddr(cs, raftTn.Addr().String(), apiAdv, publishPeerTimeout); err != nil {
 		log.Fatalf("failed to set peer for %s to %s: %s", raftAddr, httpAddr, err.Error())
@@ -320,31 +297,10 @@ func main() {
 }
 
 func determineJoinAddresses() ([]string, error) {
-	apiAdv := httpAddr
-	if httpAdv != "" {
-		apiAdv = httpAdv
-	}
-
 	var addrs []string
 	if joinAddr != "" {
 		// Explicit join addresses are first priority.
 		addrs = strings.Split(joinAddr, ",")
-	}
-
-	if discoID != "" {
-		log.Printf("registering with Discovery Service at %s with ID %s", discoURL, discoID)
-		c := disco.New(discoURL)
-		r, err := c.Register(discoID, apiAdv)
-		if err != nil {
-			return nil, err
-		}
-		log.Println("Discovery Service responded with nodes:", r.Nodes)
-		for _, a := range r.Nodes {
-			if a != apiAdv {
-				// Only other nodes can be joined.
-				addrs = append(addrs, a)
-			}
-		}
 	}
 
 	return addrs, nil
