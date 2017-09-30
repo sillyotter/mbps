@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	sql "github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/store"
+	sql "github.com/sillyotter/mbps/db"
+	"github.com/sillyotter/mbps/store"
 )
 
 // Store is the interface the Raft-based database must implement.

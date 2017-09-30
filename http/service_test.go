@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	sql "github.com/rqlite/rqlite/db"
-	"github.com/rqlite/rqlite/store"
+	sql "github.com/sillyotter/mbps/db"
+	"github.com/sillyotter/mbps/store"
 )
 
 func Test_NormalizeAddr(t *testing.T) {

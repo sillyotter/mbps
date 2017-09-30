@@ -23,12 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rqlite/rqlite/auth"
-	"github.com/rqlite/rqlite/cluster"
-	"github.com/rqlite/rqlite/disco"
-	httpd "github.com/rqlite/rqlite/http"
-	"github.com/rqlite/rqlite/store"
-	"github.com/rqlite/rqlite/tcp"
+	"github.com/sillyotter/mbps/auth"
+	"github.com/sillyotter/mbps/cluster"
+	"github.com/sillyotter/mbps/disco"
+	httpd "github.com/sillyotter/mbps/http"
+	"github.com/sillyotter/mbps/store"
+	"github.com/sillyotter/mbps/tcp"
 )
 
 const sqliteDSN = "db.sqlite"
