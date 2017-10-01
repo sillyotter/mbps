@@ -172,7 +172,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to determine absolute data path: %s", err.Error())
 	}
-	dbConf := store.NewDBConfig("dsn", true)
+	dbConf := store.NewDBConfig("dsn")
 
 	str := store.New(&store.StoreConfig{
 		DBConf: dbConf,

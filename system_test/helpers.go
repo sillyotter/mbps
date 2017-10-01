@@ -301,7 +301,7 @@ func mustNewNode(enableSingle bool) *Node {
 		Dir: mustTempDir(),
 	}
 
-	dbConf := store.NewDBConfig("", false)
+	dbConf := store.NewDBConfig("")
 	node.Store = store.New(&store.StoreConfig{
 		DBConf: dbConf,
 		Dir:    node.Dir,

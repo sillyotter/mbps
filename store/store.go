@@ -141,13 +141,12 @@ func (c *clusterMeta) AddrForPeer(addr string) string {
 
 // DBConfig represents the configuration of the underlying SQLite database.
 type DBConfig struct {
-	DSN    string // Any custom DSN
-	Memory bool   // Whether the database is in-memory only.
+	path string // Any custom DSN
 }
 
 // NewDBConfig returns a new DB config instance.
-func NewDBConfig(dsn string, memory bool) *DBConfig {
-	return &DBConfig{DSN: dsn, Memory: memory}
+func NewDBConfig(p string) *DBConfig {
+	return &DBConfig{path: p}
 }
 
 // Store is a SQLite database, where all changes are made via Raft consensus.
@@ -397,26 +396,17 @@ func (s *Store) WaitForAppliedIndex(idx uint64, timeout time.Duration) error {
 
 // Stats returns stats for the store.
 func (s *Store) Stats() (map[string]interface{}, error) {
-	fkEnabled, err := s.db.FKConstraints()
+
+	dbStatus := map[string]interface{}{
+		"version": sql.DBVersion,
+	}
+
+	dbStatus["path"] = s.dbPath
+	stat, err := os.Stat(s.dbPath)
 	if err != nil {
 		return nil, err
 	}
-
-	dbStatus := map[string]interface{}{
-		"dns":            s.dbConf.DSN,
-		"fk_constraints": enabledFromBool(fkEnabled),
-		"version":        sql.DBVersion,
-	}
-	if !s.dbConf.Memory {
-		dbStatus["path"] = s.dbPath
-		stat, err := os.Stat(s.dbPath)
-		if err != nil {
-			return nil, err
-		}
-		dbStatus["size"] = stat.Size()
-	} else {
-		dbStatus["path"] = ":memory:"
-	}
+	dbStatus["size"] = stat.Size()
 
 	s.metaMu.RLock()
 	defer s.metaMu.RUnlock()
@@ -538,8 +528,8 @@ func (s *Store) Query(queries []string, timings, tx bool, lvl ConsistencyLevel) 
 		return nil, ErrNotLeader
 	}
 
-	r, err := s.db.Query(queries, tx, timings)
-	return r, err
+	//r, err := s.db.Query(queries, tx, timings)
+	return make([]*sql.Rows, 0), nil
 }
 
 // UpdateAPIPeers updates the cluster-wide peer information.
@@ -592,23 +582,17 @@ func (s *Store) Remove(addr string) error {
 func (s *Store) open() (*sql.DB, error) {
 	var db *sql.DB
 	var err error
-	if !s.dbConf.Memory {
-		// as it will be rebuilt from (possibly) a snapshot and committed log entries.
-		if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
-			return nil, err
-		}
-		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
-		if err != nil {
-			return nil, err
-		}
-		s.logger.Println("SQLite database opened at", s.dbPath)
-	} else {
-		db, err = sql.OpenInMemoryWithDSN(s.dbConf.DSN)
-		if err != nil {
-			return nil, err
-		}
-		s.logger.Println("SQLite in-memory database opened")
+
+	// as it will be rebuilt from (possibly) a snapshot and committed log entries.
+	if err := os.Remove(s.dbPath); err != nil && !os.IsNotExist(err) {
+		return nil, err
 	}
+	db, err = sql.Open(s.dbPath)
+	if err != nil {
+		return nil, err
+	}
+	s.logger.Println("SQLite database opened at", s.dbPath)
+
 	return db, nil
 }
 
@@ -652,11 +636,14 @@ func (s *Store) Apply(l *raft.Log) interface{} {
 			return &fsmGenericResponse{error: err}
 		}
 		if c.Typ == execute {
-			r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
-			return &fsmExecuteResponse{results: r, error: err}
+			r := make([]*sql.Result, 0)
+			//r, err := s.db.Execute(d.Queries, d.Tx, d.Timings)
+			return &fsmExecuteResponse{results: r, error: nil}
 		}
-		r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
-		return &fsmQueryResponse{rows: r, error: err}
+		r := make([]*sql.Rows, 0)
+
+		//r, err := s.db.Query(d.Queries, d.Tx, d.Timings)
+		return &fsmQueryResponse{rows: r, error: nil}
 	case peer:
 		var d peersSub
 		if err := json.Unmarshal(c.Sub, &d); err != nil {
@@ -750,35 +737,15 @@ func (s *Store) Restore(rc io.ReadCloser) error {
 
 	var db *sql.DB
 	var err error
-	if !s.dbConf.Memory {
-		// Write snapshot over any existing database file.
-		if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
-			return err
-		}
+	// Write snapshot over any existing database file.
+	if err := ioutil.WriteFile(s.dbPath, database, 0660); err != nil {
+		return err
+	}
 
-		// Re-open it.
-		db, err = sql.OpenWithDSN(s.dbPath, s.dbConf.DSN)
-		if err != nil {
-			return err
-		}
-	} else {
-		// In memory. Copy to temporary file, and then load memory from file.
-		f, err := ioutil.TempFile("", "rqlilte-snap-")
-		if err != nil {
-			return err
-		}
-		f.Close()
-		defer os.Remove(f.Name())
-
-		if err := ioutil.WriteFile(f.Name(), database, 0660); err != nil {
-			return err
-		}
-
-		// Load an in-memory database from the snapshot now on disk.
-		db, err = sql.LoadInMemoryWithDSN(f.Name(), s.dbConf.DSN)
-		if err != nil {
-			return err
-		}
+	// Re-open it.
+	db, err = sql.Open(s.dbPath)
+	if err != nil {
+		return err
 	}
 	s.db = db
 
