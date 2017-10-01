@@ -1,0 +1,17 @@
+{
+    "go.gopath": "c:\\projects\\mbps\\",
+    "go.inferGopath": false,
+    "go.vetOnSave": "package",
+    "go.lintOnSave": "package",
+    "go.buildOnSave": "package",
+    "go.formatOnSave": true,
+    "go.enableCodeLens": {
+        "references": false,
+        "runtest": true
+    },
+    "go.liveErrors": {
+        "enabled": true,
+        "delay": 500
+    },
+    "go.useCodeSnippetsOnFunctionSuggest": false
+}

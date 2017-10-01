@@ -73,9 +73,20 @@ func (db *DB) Backup(path string) error {
 	return nil
 }
 
+// All I need really is a
+// Should this expose low level db stuff, or should this
+// expose high leve pubsub stuff and the store just calls down to it?
+// and if i do just low lever, what level/
+// and what do I need to do to vscode to get it to not make a mess of things?
+// because now doing antying blows up the cpu
+// did that do it?
 /*
 All I have to do is make the db bit work right, and expose the needed operations
 then modify store to handle the right operations
+then modify store to handle the right operations
+//
+//
+//
 then handle the http server to accept the commands
 and make sure they get here
 and make the client invoke them for testing purposes
